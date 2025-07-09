@@ -1,9 +1,0 @@
-cmake_minimum_required(VERSION 3.14)
-project(TestApp)
-
-set(CMAKE_CXX_STANDARD 17)
-
-find_package(Qt6 COMPONENTS Widgets REQUIRED)
-
-add_executable(TestApp test.cpp)
-target_link_libraries(TestApp Qt6::Widgets) 

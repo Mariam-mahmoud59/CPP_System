@@ -10,8 +10,15 @@
 #include <QDoubleSpinBox>
 #include <QDialog>
 #include <QMessageBox>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QList>
+#include <QVariant>
+#include <QDebug>
 
 struct Product {
+    int id = -1; // Add id for DB mapping
     QString name;
     QString category;
     double price;
@@ -21,6 +28,7 @@ struct Product {
 };
 
 class AddProductDialog : public QDialog {
+    Q_OBJECT
 public:
     AddProductDialog(QWidget *parent = nullptr);
     Product getProduct() const;
@@ -35,8 +43,14 @@ private:
 };
 
 class InventoryScreen : public QWidget {
+    Q_OBJECT
 public:
     InventoryScreen(QWidget *parent = nullptr);
+    QList<Product> getProducts() const;
+    void loadProductsFromDatabase();
+
+signals:
+    void inventoryChanged();
 
 private slots:
     void addProduct();

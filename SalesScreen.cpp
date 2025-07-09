@@ -13,6 +13,10 @@
 #include <QMessageBox>
 #include <QFont>
 #include <QFrame>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QVariant>
+#include <QDebug>
 
 SalesScreen::SalesScreen(QWidget *parent) : QWidget(parent), subtotal(0), tax(0), finalTotal(0) {
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
@@ -162,6 +166,7 @@ SalesScreen::SalesScreen(QWidget *parent) : QWidget(parent), subtotal(0), tax(0)
     mainLayout->addLayout(rightLayout, 1);
 
     updateTotal();
+    reloadProductsFromDatabase(); // Load products on startup
 }
 
 void SalesScreen::setupProductList() {
@@ -296,4 +301,28 @@ void SalesScreen::addProductToSales(const QString &name, double price, int quant
     // Add the new product
     QString productText = QString("%1 - $%2").arg(name).arg(price, 0, 'f', 2);
     productList->addItem(productText);
+} 
+
+void SalesScreen::reloadProductsFromDatabase() {
+    productList->clear();
+    QSqlQuery query("SELECT name, price, quantity FROM products WHERE quantity > 0");
+    int count = 0;
+    while (query.next()) {
+        QString name = query.value(0).toString();
+        double price = query.value(1).toDouble();
+        int quantity = query.value(2).toInt();
+        QString productText = QString("%1 - $%2").arg(name).arg(price, 0, 'f', 2);
+        productList->addItem(productText);
+        count++;
+    }
+    if (count == 0) {
+        QListWidgetItem *noProductsItem = new QListWidgetItem("No products available. Add products in the Inventory section.");
+        noProductsItem->setTextAlignment(Qt::AlignCenter);
+        noProductsItem->setForeground(QColor("#888888"));
+        productList->addItem(noProductsItem);
+    }
+}
+
+void SalesScreen::onInventoryChanged() {
+    reloadProductsFromDatabase();
 } 

@@ -15,6 +15,10 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QInputDialog>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QVariant>
+#include <QDebug>
 
 // AddProductDialog Implementation
 AddProductDialog::AddProductDialog(QWidget *parent) : QDialog(parent) {
@@ -95,6 +99,27 @@ Product AddProductDialog::getProduct() const {
 }
 
 // InventoryScreen Implementation
+QList<Product> InventoryScreen::getProducts() const {
+    return products;
+}
+
+void InventoryScreen::loadProductsFromDatabase() {
+    products.clear();
+    QSqlQuery query("SELECT id, name, category, price, quantity, min_stock, description FROM products");
+    while (query.next()) {
+        Product p;
+        p.id = query.value(0).toInt();
+        p.name = query.value(1).toString();
+        p.category = query.value(2).toString();
+        p.price = query.value(3).toDouble();
+        p.quantity = query.value(4).toInt();
+        p.minStock = query.value(5).toInt();
+        p.description = query.value(6).toString();
+        products.append(p);
+    }
+    refreshInventory();
+}
+
 InventoryScreen::InventoryScreen(QWidget *parent) : QWidget(parent) {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(20);
@@ -173,6 +198,7 @@ InventoryScreen::InventoryScreen(QWidget *parent) : QWidget(parent) {
 
     setupInventoryTable();
     updateLowStockIndicator();
+    loadProductsFromDatabase();
 }
 
 void InventoryScreen::setupInventoryTable() {
@@ -195,22 +221,33 @@ void InventoryScreen::addProduct() {
     AddProductDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
         Product newProduct = dialog.getProduct();
-        
         if (newProduct.name.isEmpty()) {
             QMessageBox::warning(this, "Warning", "Product name cannot be empty!");
             return;
         }
-        
-        // Check if product already exists
-        for (const Product &product : products) {
-            if (product.name == newProduct.name) {
-                QMessageBox::warning(this, "Warning", "A product with this name already exists!");
-                return;
-            }
+        // Check if product already exists in DB
+        QSqlQuery checkQuery;
+        checkQuery.prepare("SELECT COUNT(*) FROM products WHERE name = ?");
+        checkQuery.addBindValue(newProduct.name);
+        if (!checkQuery.exec() || !checkQuery.next() || checkQuery.value(0).toInt() > 0) {
+            QMessageBox::warning(this, "Warning", "A product with this name already exists!");
+            return;
         }
-        
-        products.append(newProduct);
-        refreshInventory();
+        // Insert into DB
+        QSqlQuery insertQuery;
+        insertQuery.prepare("INSERT INTO products (name, category, price, quantity, min_stock, description) VALUES (?, ?, ?, ?, ?, ?)");
+        insertQuery.addBindValue(newProduct.name);
+        insertQuery.addBindValue(newProduct.category);
+        insertQuery.addBindValue(newProduct.price);
+        insertQuery.addBindValue(newProduct.quantity);
+        insertQuery.addBindValue(newProduct.minStock);
+        insertQuery.addBindValue(newProduct.description);
+        if (!insertQuery.exec()) {
+            QMessageBox::critical(this, "Error", "Failed to add product: " + insertQuery.lastError().text());
+            return;
+        }
+        loadProductsFromDatabase();
+        emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product added successfully!");
     }
 }
@@ -221,16 +258,20 @@ void InventoryScreen::editProduct() {
         QMessageBox::warning(this, "Warning", "Please select a product to edit!");
         return;
     }
-    
-    // For simplicity, we'll just allow editing quantity for now
+    Product &prod = products[currentRow];
     bool ok;
-    int newQuantity = QInputDialog::getInt(this, "Edit Quantity", 
-                                         "Enter new quantity:", 
-                                         products[currentRow].quantity, 
-                                         0, 9999, 1, &ok);
+    int newQuantity = QInputDialog::getInt(this, "Edit Quantity", "Enter new quantity:", prod.quantity, 0, 9999, 1, &ok);
     if (ok) {
-        products[currentRow].quantity = newQuantity;
-        refreshInventory();
+        QSqlQuery updateQuery;
+        updateQuery.prepare("UPDATE products SET quantity = ? WHERE id = ?");
+        updateQuery.addBindValue(newQuantity);
+        updateQuery.addBindValue(prod.id);
+        if (!updateQuery.exec()) {
+            QMessageBox::critical(this, "Error", "Failed to update product: " + updateQuery.lastError().text());
+            return;
+        }
+        loadProductsFromDatabase();
+        emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product updated successfully!");
     }
 }
@@ -241,32 +282,31 @@ void InventoryScreen::deleteProduct() {
         QMessageBox::warning(this, "Warning", "Please select a product to delete!");
         return;
     }
-    
-    QString productName = products[currentRow].name;
-    QMessageBox::StandardButton reply = QMessageBox::question(this, "Confirm Delete", 
-                                                             QString("Are you sure you want to delete '%1'?").arg(productName),
-                                                             QMessageBox::Yes | QMessageBox::No);
-    
+    Product prod = products[currentRow];
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Confirm Delete", QString("Are you sure you want to delete '%1'?").arg(prod.name), QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        products.removeAt(currentRow);
-        refreshInventory();
+        QSqlQuery delQuery;
+        delQuery.prepare("DELETE FROM products WHERE id = ?");
+        delQuery.addBindValue(prod.id);
+        if (!delQuery.exec()) {
+            QMessageBox::critical(this, "Error", "Failed to delete product: " + delQuery.lastError().text());
+            return;
+        }
+        loadProductsFromDatabase();
+        emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product deleted successfully!");
     }
 }
 
 void InventoryScreen::refreshInventory() {
     inventoryTable->setRowCount(products.size());
-    
     for (int i = 0; i < products.size(); ++i) {
         const Product &product = products[i];
-        
         inventoryTable->setItem(i, 0, new QTableWidgetItem(product.name));
         inventoryTable->setItem(i, 1, new QTableWidgetItem(product.category));
         inventoryTable->setItem(i, 2, new QTableWidgetItem(QString("$%1").arg(product.price, 0, 'f', 2)));
         inventoryTable->setItem(i, 3, new QTableWidgetItem(QString::number(product.quantity)));
         inventoryTable->setItem(i, 4, new QTableWidgetItem(QString::number(product.minStock)));
-        
-        // Status column
         QString status;
         QString statusColor;
         if (product.quantity == 0) {
@@ -279,12 +319,10 @@ void InventoryScreen::refreshInventory() {
             status = "In Stock";
             statusColor = "#4CAF50";
         }
-        
         QTableWidgetItem *statusItem = new QTableWidgetItem(status);
         statusItem->setForeground(QColor(statusColor));
         inventoryTable->setItem(i, 5, statusItem);
     }
-    
     totalProductsLabel->setText(QString("Total Products: %1").arg(products.size()));
     updateLowStockIndicator();
 }

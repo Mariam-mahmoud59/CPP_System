@@ -22,6 +22,10 @@ class SalesScreen : public QWidget {
 public:
     SalesScreen(QWidget *parent = nullptr);
     void addProductToSales(const QString &name, double price, int quantity);
+    void reloadProductsFromDatabase();
+
+public slots:
+    void onInventoryChanged();
 
 private slots:
     void addToCart();

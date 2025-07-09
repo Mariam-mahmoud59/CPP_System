@@ -58,6 +58,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     QObject::connect(inventoryBtn, &QPushButton::clicked, [stack](){ stack->setCurrentIndex(2); });
     QObject::connect(reportsBtn, &QPushButton::clicked, [stack](){ stack->setCurrentIndex(3); });
 
+    // Connect inventory changes to sales screen
+    QObject::connect(inventoryScreen, &InventoryScreen::inventoryChanged, salesScreen, &SalesScreen::onInventoryChanged);
+
     mainLayout->addWidget(sidebar);
     mainLayout->addWidget(stack, 1);
     mainLayout->setSpacing(0);
