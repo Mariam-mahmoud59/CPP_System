@@ -48,6 +48,7 @@ public:
     InventoryScreen(QWidget *parent = nullptr);
     QList<Product> getProducts() const;
     void loadProductsFromDatabase();
+    void setUsername(const QString& username); // Set current user
 
 signals:
     void inventoryChanged();
@@ -74,4 +75,5 @@ private:
     QLabel *lowStockLabel;
     
     QList<Product> products;
+    QString username; // Current user
 }; 

@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 
 class DashboardScreen : public QWidget {
+    Q_OBJECT
 public:
     DashboardScreen(QWidget *parent = nullptr);
     void updateMetrics();

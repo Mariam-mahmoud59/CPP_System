@@ -19,10 +19,12 @@ struct CartItem {
 };
 
 class SalesScreen : public QWidget {
+    Q_OBJECT
 public:
     SalesScreen(QWidget *parent = nullptr);
     void addProductToSales(const QString &name, double price, int quantity);
     void reloadProductsFromDatabase();
+    void setUsername(const QString& username); // Set current user
 
 public slots:
     void onInventoryChanged();
@@ -58,4 +60,5 @@ private:
     double subtotal;
     double tax;
     double finalTotal;
+    QString username; // Current user
 }; 

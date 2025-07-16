@@ -13,6 +13,13 @@
 #include <QFrame>
 #include <QTabWidget>
 #include <QCalendarWidget>
+#include <QSqlQuery>
+#include <QFileDialog>
+#include <QProcess>
+#include <QDir>
+#include <QProcessEnvironment>
+#include <QSqlError>
+#include <QDebug>
 
 ReportsScreen::ReportsScreen(QWidget *parent) : QWidget(parent) {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -83,6 +90,12 @@ ReportsScreen::ReportsScreen(QWidget *parent) : QWidget(parent) {
     
     mainLayout->addLayout(summaryLayout);
 
+    // Backup Button
+    backupBtn = new QPushButton("Backup Data");
+    backupBtn->setStyleSheet("QPushButton { background: #607D8B; color: white; border: none; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; } QPushButton:hover { background: #455A64; }");
+    connect(backupBtn, &QPushButton::clicked, this, &ReportsScreen::backupDatabase);
+    mainLayout->addWidget(backupBtn, 0, Qt::AlignRight);
+
     // Tab Widget for different reports
     tabWidget = new QTabWidget;
     tabWidget->setStyleSheet("QTabWidget::pane { border: 2px solid #444; border-radius: 8px; background: #2d313a; } QTabBar::tab { background: #3a3f4b; color: white; padding: 10px 20px; border: none; } QTabBar::tab:selected { background: #2196F3; } QTabBar::tab:hover { background: #1976D2; }");
@@ -114,6 +127,10 @@ ReportsScreen::ReportsScreen(QWidget *parent) : QWidget(parent) {
     endDateEdit->setCalendarPopup(true);
     endDateEdit->setDate(QDate::currentDate());
     endDateEdit->setStyleSheet("QDateEdit { padding: 8px; border: 2px solid #444; border-radius: 6px; background: #2d313a; color: white; font-size: 14px; }");
+    cashierCombo = new QComboBox;
+    cashierCombo->setStyleSheet("QComboBox { padding: 8px; border: 2px solid #444; border-radius: 6px; background: #2d313a; color: white; font-size: 14px; }");
+    cashierCombo->addItem("All Cashiers");
+    cashierCombo->setVisible(false); // Only show for admins
     
     generateSalesBtn = new QPushButton("Generate Report");
     generateSalesBtn->setStyleSheet("QPushButton { background: #4CAF50; color: white; border: none; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; } QPushButton:hover { background: #45a049; }");
@@ -133,6 +150,7 @@ ReportsScreen::ReportsScreen(QWidget *parent) : QWidget(parent) {
     salesControlsLayout->addWidget(startDateEdit);
     salesControlsLayout->addWidget(endLabel);
     salesControlsLayout->addWidget(endDateEdit);
+    salesControlsLayout->addWidget(cashierCombo);
     salesControlsLayout->addStretch();
     salesControlsLayout->addWidget(generateSalesBtn);
     salesControlsLayout->addWidget(exportSalesBtn);
@@ -181,8 +199,24 @@ ReportsScreen::ReportsScreen(QWidget *parent) : QWidget(parent) {
     tabWidget->addTab(inventoryTab, "Inventory Report");
     
     mainLayout->addWidget(tabWidget);
-    
-    refreshReports();
+
+    // Activity Log Tab
+    QWidget *activityTab = new QWidget;
+    QVBoxLayout *activityLayout = new QVBoxLayout(activityTab);
+    activityLogTable = new QTableWidget;
+    activityLogTable->setColumnCount(4);
+    activityLogTable->setHorizontalHeaderLabels({"User", "Action", "Details", "Timestamp"});
+    activityLogTable->setStyleSheet("QTableWidget { background: #2d313a; border: 2px solid #444; border-radius: 8px; color: white; gridline-color: #444; } QHeaderView::section { background: #3a3f4b; color: white; padding: 8px; border: none; } QTableWidget::item { padding: 8px; }");
+    activityLogTable->horizontalHeader()->setStretchLastSection(true);
+    activityLogTable->setAlternatingRowColors(true);
+    activityLogTable->setMinimumHeight(200);
+    activityLayout->addWidget(activityLogTable);
+    QPushButton *refreshLogBtn = new QPushButton("Refresh Log");
+    refreshLogBtn->setStyleSheet("QPushButton { background: #607D8B; color: white; border: none; border-radius: 8px; padding: 8px; font-size: 13px; font-weight: bold; } QPushButton:hover { background: #455A64; }");
+    connect(refreshLogBtn, &QPushButton::clicked, this, &ReportsScreen::refreshActivityLog);
+    activityLayout->addWidget(refreshLogBtn, 0, Qt::AlignRight);
+    tabWidget->addTab(activityTab, "Activity Log");
+    refreshActivityLog();
 }
 
 void ReportsScreen::setupSummaryCards() {
@@ -214,6 +248,29 @@ void ReportsScreen::loadSampleData() {
     // This method is no longer used - all data comes from user interactions
     salesData.clear();
     inventoryData.clear();
+}
+
+void ReportsScreen::setUserRole(const QString& role) {
+    userRole = role;
+    updateCashierFilter();
+}
+
+void ReportsScreen::setUsername(const QString& uname) {
+    username = uname;
+}
+
+void ReportsScreen::updateCashierFilter() {
+    if (userRole == "admin") {
+        cashierCombo->setVisible(true);
+        cashierCombo->clear();
+        cashierCombo->addItem("All Cashiers");
+        QSqlQuery q("SELECT username FROM users WHERE role = 'cashier'");
+        while (q.next()) {
+            cashierCombo->addItem(q.value(0).toString());
+        }
+    } else {
+        cashierCombo->setVisible(false);
+    }
 }
 
 void ReportsScreen::generateSalesReport() {
@@ -267,6 +324,8 @@ void ReportsScreen::generateInventoryReport() {
 void ReportsScreen::exportReport() {
     QString currentTab = tabWidget->tabText(tabWidget->currentIndex());
     QMessageBox::information(this, "Export", QString("Exporting %1 report...\n\nThis would save the report to a file in a real application.").arg(currentTab));
+    // Log export
+    logActivity(username, "Export Report", "Report exported by user");
 }
 
 void ReportsScreen::printReport() {
@@ -281,4 +340,65 @@ void ReportsScreen::refreshReports() {
     totalOrdersLabel->setText("0");
     averageOrderLabel->setText("$0.00");
     topProductLabel->setText("No data");
+} 
+
+void ReportsScreen::backupDatabase() {
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Database Backup", QDir::homePath() + "/MonsterDB_backup.sql", "SQL Files (*.sql)");
+    if (fileName.isEmpty()) return;
+
+    // Adjust these as needed for your environment
+    QString pgDumpPath = "pg_dump"; // Assumes pg_dump is in PATH
+    QString dbName = "MonsterDB";
+    QString user = "postgres";
+    QString host = "localhost";
+    QString port = "5432";
+    QString password = "Monsterxd2005@#@#";
+
+    // Set PGPASSWORD env variable for non-interactive password passing
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("PGPASSWORD", password);
+
+    QStringList args;
+    args << "-h" << host << "-p" << port << "-U" << user << "-F" << "p" << "-f" << fileName << dbName;
+
+    QProcess process;
+    process.setProcessEnvironment(env);
+    process.start(pgDumpPath, args);
+    if (!process.waitForStarted()) {
+        QMessageBox::critical(this, "Backup Failed", "Could not start pg_dump. Make sure PostgreSQL tools are installed and in your PATH.");
+        return;
+    }
+    process.waitForFinished(-1);
+    if (process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0) {
+        QMessageBox::information(this, "Backup Complete", "Database backup was created successfully!\n\n" + fileName);
+        // Log backup action
+        logActivity(userRole, "Backup Database", fileName);
+    } else {
+        QString err = process.readAllStandardError();
+        QMessageBox::critical(this, "Backup Failed", "pg_dump failed.\n\n" + err);
+    }
+}
+
+void ReportsScreen::logActivity(const QString& username, const QString& action, const QString& details) {
+    QSqlQuery q;
+    q.prepare("INSERT INTO activity_log (username, action, details) VALUES (?, ?, ?)");
+    q.addBindValue(username);
+    q.addBindValue(action);
+    q.addBindValue(details);
+    if (!q.exec()) {
+        qDebug() << "Failed to log activity:" << q.lastError().text();
+    }
+}
+
+void ReportsScreen::refreshActivityLog() {
+    activityLogTable->setRowCount(0);
+    QSqlQuery q("SELECT username, action, details, timestamp FROM activity_log ORDER BY timestamp DESC LIMIT 100");
+    int row = 0;
+    while (q.next()) {
+        activityLogTable->insertRow(row);
+        for (int col = 0; col < 4; ++col) {
+            activityLogTable->setItem(row, col, new QTableWidgetItem(q.value(col).toString()));
+        }
+        ++row;
+    }
 } 

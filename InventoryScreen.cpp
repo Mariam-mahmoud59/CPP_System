@@ -217,6 +217,10 @@ void InventoryScreen::loadSampleData() {
     refreshInventory();
 }
 
+void InventoryScreen::setUsername(const QString& uname) {
+    username = uname;
+}
+
 void InventoryScreen::addProduct() {
     AddProductDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
@@ -233,7 +237,6 @@ void InventoryScreen::addProduct() {
             QMessageBox::warning(this, "Warning", "A product with this name already exists!");
             return;
         }
-        // Insert into DB
         QSqlQuery insertQuery;
         insertQuery.prepare("INSERT INTO products (name, category, price, quantity, min_stock, description) VALUES (?, ?, ?, ?, ?, ?)");
         insertQuery.addBindValue(newProduct.name);
@@ -249,6 +252,8 @@ void InventoryScreen::addProduct() {
         loadProductsFromDatabase();
         emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product added successfully!");
+        // Log add
+        ReportsScreen::logActivity(username, "Add Product", newProduct.name);
     }
 }
 
@@ -273,6 +278,8 @@ void InventoryScreen::editProduct() {
         loadProductsFromDatabase();
         emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product updated successfully!");
+        // Log edit
+        ReportsScreen::logActivity(username, "Edit Product", prod.name + ", Qty: " + QString::number(newQuantity));
     }
 }
 
@@ -295,6 +302,8 @@ void InventoryScreen::deleteProduct() {
         loadProductsFromDatabase();
         emit inventoryChanged();
         QMessageBox::information(this, "Success", "Product deleted successfully!");
+        // Log delete
+        ReportsScreen::logActivity(username, "Delete Product", prod.name);
     }
 }
 
@@ -309,19 +318,30 @@ void InventoryScreen::refreshInventory() {
         inventoryTable->setItem(i, 4, new QTableWidgetItem(QString::number(product.minStock)));
         QString status;
         QString statusColor;
+        QColor rowColor;
         if (product.quantity == 0) {
             status = "Out of Stock";
             statusColor = "#F44336";
+            rowColor = QColor("#FFCDD2"); // light red
         } else if (product.quantity <= product.minStock) {
             status = "Low Stock";
             statusColor = "#FF9800";
+            rowColor = QColor("#FFF9C4"); // light yellow
         } else {
             status = "In Stock";
             statusColor = "#4CAF50";
+            rowColor = QColor(); // default
         }
         QTableWidgetItem *statusItem = new QTableWidgetItem(status);
         statusItem->setForeground(QColor(statusColor));
         inventoryTable->setItem(i, 5, statusItem);
+        // Highlight the row if low/out of stock
+        if (rowColor.isValid()) {
+            for (int col = 0; col < inventoryTable->columnCount(); ++col) {
+                QTableWidgetItem *item = inventoryTable->item(i, col);
+                if (item) item->setBackground(rowColor);
+            }
+        }
     }
     totalProductsLabel->setText(QString("Total Products: %1").arg(products.size()));
     updateLowStockIndicator();

@@ -28,8 +28,11 @@ struct InventoryReport {
 };
 
 class ReportsScreen : public QWidget {
+    Q_OBJECT
 public:
     ReportsScreen(QWidget *parent = nullptr);
+    void setUserRole(const QString& role);
+    void setUsername(const QString& username); // Set current user
 
 private slots:
     void generateSalesReport();
@@ -37,12 +40,15 @@ private slots:
     void exportReport();
     void printReport();
     void refreshReports();
+    void backupDatabase(); // Slot for backup button
+    void refreshActivityLog(); // Slot for activity log tab
 
 private:
     void setupSalesReport();
     void setupInventoryReport();
     void setupSummaryCards();
     void loadSampleData();
+    void updateCashierFilter();
     
     QTabWidget *tabWidget;
     
@@ -51,6 +57,7 @@ private:
     QComboBox *salesPeriodCombo;
     QDateEdit *startDateEdit;
     QDateEdit *endDateEdit;
+    QComboBox *cashierCombo;
     QPushButton *generateSalesBtn;
     QPushButton *exportSalesBtn;
     QPushButton *printSalesBtn;
@@ -72,4 +79,9 @@ private:
     
     QList<SalesReport> salesData;
     QList<InventoryReport> inventoryData;
+    QString userRole;
+    QString username; // Current user
+    QPushButton *backupBtn; // Backup button
+    QTableWidget *activityLogTable; // Activity log table
+    static void logActivity(const QString& username, const QString& action, const QString& details);
 }; 

@@ -17,6 +17,8 @@
 #include <QSqlError>
 #include <QVariant>
 #include <QDebug>
+#include "Bill.h"
+#include "BillDialog.h"
 
 SalesScreen::SalesScreen(QWidget *parent) : QWidget(parent), subtotal(0), tax(0), finalTotal(0) {
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
@@ -188,6 +190,11 @@ void SalesScreen::addToCart() {
         return;
     }
     
+    // Check for low stock warning
+    if (productList->currentItem()->foreground().color() == QColor("#FFD600")) {
+        QMessageBox::warning(this, "Low Stock", "Warning: This product is low in stock!");
+    }
+
     QStringList parts = itemText.split(" - $");
     if (parts.size() != 2) return;
 
@@ -266,14 +273,38 @@ void SalesScreen::processPayment() {
         return;
     }
 
+    // Gather payment info
     QString paymentMethod = paymentMethodCombo->currentText();
-    QString message = QString("Payment processed successfully!\n\nTotal: $%1\nPayment Method: %2\n\nThank you for your purchase!")
-                     .arg(finalTotal, 0, 'f', 2)
-                     .arg(paymentMethod);
-    
-    QMessageBox::information(this, "Payment Complete", message);
-    
-    // Clear cart after successful payment
+    double paidAmount = finalTotal; // For now, assume paid in full (can add input dialog later)
+    double change = 0.0; // For now, assume no change (can add cash input later)
+
+    // Create Bill from real cart data
+    Bill bill;
+    bill.cashier = username; // Use real cashier/user
+    bill.dateTime = QDateTime::currentDateTime();
+    bill.taxRate = 0.085; // Match UI
+    bill.paid = paidAmount;
+    bill.change = change;
+    for (const auto& item : cartItems) {
+        BillItem bitem;
+        bitem.name = item.name;
+        bitem.quantity = item.quantity;
+        bitem.price = item.price;
+        bill.items.append(bitem);
+    }
+
+    // Log sale
+    QString details = QString("Total: $%1, Items: %2, Payment: %3").arg(finalTotal, 0, 'f', 2).arg(cartItems.size()).arg(paymentMethod);
+    ReportsScreen::logActivity(username, "Sale", details);
+
+    // Show BillDialog
+    BillDialog dlg(bill, this);
+    dlg.exec();
+
+    // Show confirmation and clear cart after dialog
+    QMessageBox::information(this, "Payment Complete", QString("Payment processed successfully!\n\nTotal: $%1\nPayment Method: %2\n\nThank you for your purchase!")
+        .arg(finalTotal, 0, 'f', 2)
+        .arg(paymentMethod));
     clearCart();
 }
 
@@ -307,12 +338,18 @@ void SalesScreen::reloadProductsFromDatabase() {
     productList->clear();
     QSqlQuery query("SELECT name, price, quantity FROM products WHERE quantity > 0");
     int count = 0;
+    const int lowStockThreshold = 5;
     while (query.next()) {
         QString name = query.value(0).toString();
         double price = query.value(1).toDouble();
         int quantity = query.value(2).toInt();
         QString productText = QString("%1 - $%2").arg(name).arg(price, 0, 'f', 2);
-        productList->addItem(productText);
+        QListWidgetItem* item = new QListWidgetItem(productText);
+        if (quantity <= lowStockThreshold) {
+            item->setForeground(QColor("#FFD600")); // yellow for low stock
+            item->setToolTip("Low stock: " + QString::number(quantity));
+        }
+        productList->addItem(item);
         count++;
     }
     if (count == 0) {
@@ -325,4 +362,8 @@ void SalesScreen::reloadProductsFromDatabase() {
 
 void SalesScreen::onInventoryChanged() {
     reloadProductsFromDatabase();
+} 
+
+void SalesScreen::setUsername(const QString& uname) {
+    username = uname;
 } 
