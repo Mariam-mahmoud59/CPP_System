@@ -27,9 +27,11 @@ void BillDialog::setupUI(const Bill& bill) {
     headerLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(headerLabel);
 
-    infoLabel = new QLabel(QString("Date: %1  Time: %2<br>Cashier: %3")
+    infoLabel = new QLabel(QString("%1%2Date: %3  Time: %4<br>Cashier: %5")
+        .arg(bill.saleId != -1 ? QString("Sale ID: %1<br>").arg(bill.saleId) : "")
+        .arg("")
         .arg(bill.dateTime.date().toString("yyyy-MM-dd"))
-        .arg(bill.dateTime.time().toString("HH:mm"))
+        .arg(bill.dateTime.time().toString("hh:mm:ss"))
         .arg(bill.cashier), this);
     layout->addWidget(infoLabel);
 

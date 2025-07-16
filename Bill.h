@@ -4,6 +4,7 @@
 #include <QString>
 #include <QDateTime>
 #include <QVector>
+#include <QList> // Added for QList
 
 struct BillItem {
     QString name;
@@ -14,6 +15,7 @@ struct BillItem {
 
 class Bill {
 public:
+    int saleId = -1; // Database sale ID, -1 if not set
     QString cashier;
     QDateTime dateTime;
     QVector<BillItem> items;

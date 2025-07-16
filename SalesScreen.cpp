@@ -17,6 +17,7 @@
 #include <QSqlError>
 #include <QVariant>
 #include <QDebug>
+#include <QDateTime>
 #include "Bill.h"
 #include "BillDialog.h"
 
@@ -272,17 +273,41 @@ void SalesScreen::processPayment() {
         QMessageBox::warning(this, "Warning", "Cart is empty!");
         return;
     }
-
     // Gather payment info
     QString paymentMethod = paymentMethodCombo->currentText();
     double paidAmount = finalTotal; // For now, assume paid in full (can add input dialog later)
     double change = 0.0; // For now, assume no change (can add cash input later)
-
-    // Create Bill from real cart data
+    // --- Save Sale to DB ---
+    QSqlQuery saleQuery;
+    saleQuery.prepare("INSERT INTO sales (cashier, sale_time, total, payment_method) VALUES (?, ?, ?, ?) RETURNING id");
+    saleQuery.addBindValue(username);
+    saleQuery.addBindValue(QDateTime::currentDateTime());
+    saleQuery.addBindValue(finalTotal);
+    saleQuery.addBindValue(paymentMethod);
+    if (!saleQuery.exec() || !saleQuery.next()) {
+        QMessageBox::critical(this, "Error", "Failed to save sale: " + saleQuery.lastError().text());
+        return;
+    }
+    int saleId = saleQuery.value(0).toInt();
+    // Save each item
+    QSqlQuery itemQuery;
+    for (const auto& item : cartItems) {
+        itemQuery.prepare("INSERT INTO sales_items (sale_id, product_name, quantity, price) VALUES (?, ?, ?, ?)");
+        itemQuery.addBindValue(saleId);
+        itemQuery.addBindValue(item.name);
+        itemQuery.addBindValue(item.quantity);
+        itemQuery.addBindValue(item.price);
+        if (!itemQuery.exec()) {
+            QMessageBox::critical(this, "Error", "Failed to save sale item: " + itemQuery.lastError().text());
+            // Optionally: rollback or mark sale as incomplete
+        }
+    }
+    // --- Create Bill from real cart data ---
     Bill bill;
-    bill.cashier = username; // Use real cashier/user
+    bill.saleId = saleId;
+    bill.cashier = username;
     bill.dateTime = QDateTime::currentDateTime();
-    bill.taxRate = 0.085; // Match UI
+    bill.taxRate = 0.085;
     bill.paid = paidAmount;
     bill.change = change;
     for (const auto& item : cartItems) {
@@ -292,15 +317,12 @@ void SalesScreen::processPayment() {
         bitem.price = item.price;
         bill.items.append(bitem);
     }
-
     // Log sale
-    QString details = QString("Total: $%1, Items: %2, Payment: %3").arg(finalTotal, 0, 'f', 2).arg(cartItems.size()).arg(paymentMethod);
+    QString details = QString("Total: $%1, Items: %2, Payment: %3, SaleID: %4").arg(finalTotal, 0, 'f', 2).arg(cartItems.size()).arg(paymentMethod).arg(saleId);
     ReportsScreen::logActivity(username, "Sale", details);
-
     // Show BillDialog
     BillDialog dlg(bill, this);
     dlg.exec();
-
     // Show confirmation and clear cart after dialog
     QMessageBox::information(this, "Payment Complete", QString("Payment processed successfully!\n\nTotal: $%1\nPayment Method: %2\n\nThank you for your purchase!")
         .arg(finalTotal, 0, 'f', 2)
