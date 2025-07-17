@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "D:/Qt/6.9.1/mingw_64/include/**",
+                "D:/Qt/6.9.1/mingw_64/mkspecs/win32-g++"
+            ],
+            "compilerPath": "D:/Qt/Tools/mingw1310_64/bin/g++.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-x64"
+        }
+    ],
+    "version": 4
+}

@@ -33,6 +33,7 @@ public:
     ReportsScreen(QWidget *parent = nullptr);
     void setUserRole(const QString& role);
     void setUsername(const QString& username); // Set current user
+    static void logActivity(const QString& username, const QString& action, const QString& details);
 
 private slots:
     void generateSalesReport();
@@ -83,5 +84,4 @@ private:
     QString username; // Current user
     QPushButton *backupBtn; // Backup button
     QTableWidget *activityLogTable; // Activity log table
-    static void logActivity(const QString& username, const QString& action, const QString& details);
 }; 

@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "qapplication": "cpp",
+        "qmainwindow": "cpp",
+        "qvboxlayout": "cpp",
+        "qhboxlayout": "cpp",
+        "qgridlayout": "cpp",
+        "qmessagebox": "cpp",
+        "qdebug": "cpp",
+        "qsqlquery": "cpp",
+        "qvariant": "cpp",
+        "qcryptographichash": "cpp"
+    }
+}

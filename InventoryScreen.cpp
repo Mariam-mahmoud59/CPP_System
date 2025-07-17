@@ -19,6 +19,7 @@
 #include <QSqlError>
 #include <QVariant>
 #include <QDebug>
+#include "ReportsScreen.h"
 
 // AddProductDialog Implementation
 AddProductDialog::AddProductDialog(QWidget *parent) : QDialog(parent) {

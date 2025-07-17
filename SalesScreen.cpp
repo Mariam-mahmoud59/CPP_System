@@ -20,6 +20,7 @@
 #include <QDateTime>
 #include "Bill.h"
 #include "BillDialog.h"
+#include "ReportsScreen.h"
 
 SalesScreen::SalesScreen(QWidget *parent) : QWidget(parent), subtotal(0), tax(0), finalTotal(0) {
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
